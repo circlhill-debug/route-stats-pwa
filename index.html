@@ -305,6 +305,22 @@
   // Supabase
   const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON, { auth:{ persistSession:true }});
 
+  // === Process Supabase auth callback ===
+  // When a user clicks a magic sign‑in link, Supabase appends an access token
+  // to the URL fragment (after the #).  Calling getSessionFromUrl() parses
+  // that token and stores the session so the user stays logged in.  After
+  // processing the callback we remove the fragment from the URL.
+  (async () => {
+    try {
+      const { data, error } = await sb.auth.getSessionFromUrl();
+      if (!error && data?.session) {
+        window.history.replaceState({}, document.title, window.location.pathname);
+      }
+    } catch (e) {
+      console.warn('Auth callback error', e);
+    }
+  })();
+
   (async ()=>{ try{ await fetch(SUPABASE_URL,{mode:'no-cors'}); dConn.textContent='Connected'; }catch{ dConn.textContent='Error'; }})();
   (async function ensureSession(){
     const { data:{ session } } = await sb.auth.getSession();
