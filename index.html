@@ -6,7 +6,7 @@
 <!-- Progressive Web App metadata -->
 <meta name="theme-color" content="#2b7fff" />
 <link rel="manifest" href="/route-stats-pwa/manifest.json">
-<link rel="apple-touch-icon" href="icon-192.png" />
+<link rel="apple-touch-icon" href="/route-stats-pwa/icon-192.png" />
 <meta name="apple-mobile-web-app-capable" content="yes" />
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 <meta name="apple-mobile-web-app-title" content="RouteStats" />
@@ -97,6 +97,7 @@
   <div class="wrap row" style="justify-content:space-between">
     <h1>📈 ROUTE STATS — Live Dashboard — Aug 24, 2025</h1>
     <div class="row">
+      <button id="signInBtn" class="ghost">Sign in</button>
       <button id="linkBtn" class="ghost">Link devices (magic link)</button>
       <button id="signOut" class="ghost">Sign out</button>
     </div>
@@ -272,6 +273,21 @@
   </form>
 </dialog>
 
+<!-- Email + Password dialog -->
+<dialog id="pwDlg">
+  <form method="dialog" class="grid" style="min-width:320px;gap:10px">
+    <h3 style="margin:0">Sign in</h3>
+    <input id="loginEmail" type="email" placeholder="Email" autocomplete="username" required>
+    <input id="loginPass"  type="password" placeholder="Password" autocomplete="current-password" required>
+    <div class="row" style="justify-content:flex-end;gap:8px">
+      <button class="ghost" value="cancel">Cancel</button>
+      <button id="doLogin">Sign In</button>
+      <button id="doSignup" class="ghost" type="button" title="Create a new account">Create Account</button>
+    </div>
+    <small id="authMsg"></small>
+  </form>
+</dialog>
+
 <button class="fab" id="fab">+ Add Entry</button>
 
 <script src="https://cdn.jsdelivr.net/npm/luxon@3/build/global/luxon.min.js"></script>
@@ -306,10 +322,6 @@
   const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON, { auth:{ persistSession:true }});
 
   // === Process Supabase auth callback ===
-  // When a user clicks a magic sign‑in link, Supabase appends an access token
-  // to the URL fragment (after the #).  Calling getSessionFromUrl() parses
-  // that token and stores the session so the user stays logged in.  After
-  // processing the callback we remove the fragment from the URL.
   (async () => {
     try {
       const { data, error } = await sb.auth.getSessionFromUrl();
@@ -339,6 +351,54 @@
     if (error) alert(error.message); else { alert('Check your email for the magic link.'); linkDlg.close(); }
   });
   $('signOut').addEventListener('click', ()=> sb.auth.signOut().then(()=>location.reload()));
+
+  // === Email + Password auth (works in PWA & web) ===
+  const signInBtn = $('signInBtn');
+  const pwDlg     = $('pwDlg');
+  const loginEmail= $('loginEmail');
+  const loginPass = $('loginPass');
+  const doLogin   = $('doLogin');
+  const doSignup  = $('doSignup');
+  const authMsg   = $('authMsg');
+
+  signInBtn?.addEventListener('click', ()=> {
+    authMsg.textContent = '';
+    loginEmail.value = loginEmail.value || '';
+    loginPass.value = '';
+    pwDlg.showModal();
+  });
+
+  doLogin?.addEventListener('click', async (e)=>{
+    e.preventDefault();
+    authMsg.textContent = 'Signing in…';
+    const { error } = await sb.auth.signInWithPassword({
+      email: (loginEmail.value||'').trim(),
+      password: loginPass.value||''
+    });
+    if (error) { authMsg.textContent = 'Error: ' + error.message; return; }
+    authMsg.textContent = 'Signed in!';
+    pwDlg.close();
+    // Optionally refresh data/UI here without full reload.
+    const rows = await fetchEntries(); allRows=rows; renderTable(applySearch(allRows)); buildCharts(allRows); buildSnapshot(allRows);
+  });
+
+  doSignup?.addEventListener('click', async ()=>{
+    authMsg.textContent = 'Creating account…';
+    const { error } = await sb.auth.signUp({
+      email: (loginEmail.value||'').trim(),
+      password: loginPass.value||''
+    });
+    authMsg.textContent = error
+      ? ('Error: ' + error.message)
+      : 'Account created. If email confirmation is on, check your inbox, then Sign In.';
+  });
+
+  sb.auth.onAuthStateChange((_evt, session) => {
+    const authed = !!session;
+    const signOutBtn = $('signOut');
+    if (signOutBtn) signOutBtn.style.display = authed ? 'inline-block' : 'none';
+    dAuth.textContent = authed ? 'Session' : 'No session';
+  });
 
   // Elements
   const date=$('date'), route=$('route'), start=$('start'), end=$('end'), departTime=$('departTime'), returnTime=$('returnTime');
@@ -571,7 +631,7 @@
   importFile?.addEventListener('change', async ()=>{
     const file=importFile.files?.[0]; if(!file) return; const text=await file.text();
     const lines=text.split(/\r?\n/).filter(Boolean); if(lines.length<2){ alert('CSV is empty'); return; }
-    const headers=lines[0].split(',').map(h=>h.trim().replace(/^"|"$/g,'')); const idx=(n)=> headers.indexOf(n);
+    const headers=lines[0].split(',').map(h=> h.trim().replace(/^"|"$/g,'')); const idx=(n)=> headers.indexOf(n);
     const splitCsv=(row)=> row.split(/,(?=(?:[^\"]*\"[^\"]*\")*[^\"]*$)/); const unq=(v)=> (/^".*"$/.test(v)? v.slice(1,-1).replace(/""/g,'"') : v);
     const { data:{ user } } = await sb.auth.getUser(); if(!user){ alert('No session. Use Link devices.'); return; }
     const rows=[]; for(let i=1;i<lines.length;i++){ const cols=splitCsv(lines[i]); const get=(name)=> unq(cols[idx(name)] ?? ''); const r={ user_id:user.id, work_date:get('work_date'), route:'R1', status:get('status')||'worked', start_time:get('start_time')||null, depart_time:get('depart_time')||null, return_time:get('return_time')||null, end_time:get('end_time')||null, hours:+(get('hours')||0)||null, office_minutes:get('office_minutes')||null, route_minutes:get('route_minutes')||null, parcels:+(get('parcels')||0)||0, letters:+(get('letters')||0)||0, miles:+(get('miles')||0)||0, mood:get('mood')||null, notes:get('notes')||null, weather_json:get('weather_json')||null }; if(r.work_date) rows.push(r); }
