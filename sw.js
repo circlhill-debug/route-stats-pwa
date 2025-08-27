@@ -1,4 +1,11 @@
 // Service Worker for Route Stats PWA
+//
+// This service worker implements an offline‑first caching strategy.
+// During installation the static assets defined in STATIC_ASSETS are
+// pre‑cached. When fetching resources from the same origin we first
+// attempt to serve them from the cache, falling back to the network
+// on a miss. For cross‑origin requests we try the network first
+// and fall back to the cache if the network is unavailable.
 
 const CACHE_NAME = 'route-stats-cache-v1';
 const STATIC_ASSETS = [
@@ -11,27 +18,34 @@ const STATIC_ASSETS = [
 
 self.addEventListener('install', event => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then(cache => cache.addAll(STATIC_ASSETS))
+    caches.open(CACHE_NAME).then(cache => {
+      return cache.addAll(STATIC_ASSETS);
+    })
   );
+  // Immediately take control after installation
   self.skipWaiting();
 });
 
 self.addEventListener('activate', event => {
   event.waitUntil(
-    caches.keys().then(cacheNames =>
-      Promise.all(cacheNames.map(name => {
-        if (name !== CACHE_NAME) {
-          return caches.delete(name);
-        }
-      }))
-    )
+    caches.keys().then(cacheNames => {
+      return Promise.all(
+        cacheNames.map(name => {
+          if (name !== CACHE_NAME) {
+            return caches.delete(name);
+          }
+        })
+      );
+    })
   );
   self.clients.claim();
 });
 
 async function cacheFirst(request) {
   const cached = await caches.match(request);
-  if (cached) return cached;
+  if (cached) {
+    return cached;
+  }
   try {
     const networkResponse = await fetch(request);
     if (networkResponse && networkResponse.ok) {
@@ -39,7 +53,7 @@ async function cacheFirst(request) {
       cache.put(request, networkResponse.clone());
     }
     return networkResponse;
-  } catch {
+  } catch (error) {
     return cached;
   }
 }
@@ -52,13 +66,16 @@ async function networkFirst(request) {
       cache.put(request, networkResponse.clone());
     }
     return networkResponse;
-  } catch {
-    return await caches.match(request);
+  } catch (error) {
+    const cached = await caches.match(request);
+    return cached;
   }
 }
 
 self.addEventListener('fetch', event => {
-  if (event.request.method !== 'GET') return;
+  if (event.request.method !== 'GET') {
+    return;
+  }
   const url = new URL(event.request.url);
   if (url.origin === self.location.origin) {
     event.respondWith(cacheFirst(event.request));
