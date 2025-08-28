@@ -91,13 +91,14 @@
 
 <!-- Version tag -->
 <div style="position:fixed;top:6px;right:12px;color:#9aa0aa;font-size:11px;z-index:9999;">
-  v2025-08-27-patched
+  v2025-08-27-patched+setpw
 </div>
 <header>
   <div class="wrap row" style="justify-content:space-between">
     <h1>📈 ROUTE STATS — Live Dashboard — Aug 24, 2025</h1>
     <div class="row">
       <button id="signInBtn" class="ghost">Sign in</button>
+      <button id="setPwBtn" class="ghost" title="Set/Change password for the current account">Set password</button>
       <button id="linkBtn" class="ghost">Link devices (magic link)</button>
       <button id="signOut" class="ghost">Sign out</button>
     </div>
@@ -186,9 +187,7 @@
       <div><label>Return (optional)</label><div class="row"><input id="returnTime" type="time" placeholder="--:--"><button id="btnReturnNow" class="ghost">Now</button></div></div>
       <div><label>Clock Out</label><div class="row"><input id="end" type="time" placeholder="--:--"><button id="btnClockNow2" class="ghost">Now</button></div></div>
 
-      <div><label>Parcels</label>
-  
-<input id="parcels" type="number" min="0" value="0"></div>
+      <div><label>Parcels</label><input id="parcels" type="number" min="0" value="0"></div>
       <div><label>Letters</label><input id="letters" type="number" min="0" value="0"></div>
       <div><label>Miles</label><input id="miles" type="number" step="0.1" min="0" value="0"></div>
 
@@ -288,6 +287,20 @@
   </form>
 </dialog>
 
+<!-- NEW: Set Password dialog -->
+<dialog id="setPwDlg">
+  <form method="dialog" class="grid" style="min-width:320px;gap:10px">
+    <h3 style="margin:0">Set a new password</h3>
+    <input id="newPass"  type="password" placeholder="New password (6+ chars)" required>
+    <input id="newPass2" type="password" placeholder="Confirm password" required>
+    <div class="row" style="justify-content:flex-end;gap:8px">
+      <button class="ghost" value="cancel">Cancel</button>
+      <button id="doSetPw">Save</button>
+    </div>
+    <small id="setPwMsg"></small>
+  </form>
+</dialog>
+
 <button class="fab" id="fab">+ Add Entry</button>
 
 <script src="https://cdn.jsdelivr.net/npm/luxon@3/build/global/luxon.min.js"></script>
@@ -321,11 +334,24 @@
   // Supabase
   const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON, { auth:{ persistSession:true }});
 
-  // === Process Supabase auth callback ===
+  // === Handle auth callbacks (incl. password recovery links) ===
   (async () => {
     try {
       const { data, error } = await sb.auth.getSessionFromUrl();
-      if (!error && data?.session) {
+      // If this was a password recovery link, prompt to set a new password
+      if (!error && data?.session && /type=recovery/i.test(location.hash)) {
+        const p1 = prompt('Enter a new password (6+ characters)');
+        if (p1 && p1.length >= 6) {
+          const { error: uerr } = await sb.auth.updateUser({ password: p1 });
+          if (uerr) alert('Update failed: ' + uerr.message);
+          else alert('Password updated. You can now sign in normally.');
+        } else {
+          alert('Password must be at least 6 characters.');
+        }
+        // clean the URL
+        window.history.replaceState({}, document.title, window.location.pathname);
+      } else if (!error && data?.session) {
+        // generic callback: clean hash
         window.history.replaceState({}, document.title, window.location.pathname);
       }
     } catch (e) {
@@ -333,10 +359,11 @@
     }
   })();
 
+  // Connectivity + session bootstrap
   (async ()=>{ try{ await fetch(SUPABASE_URL,{mode:'no-cors'}); dConn.textContent='Connected'; }catch{ dConn.textContent='Error'; }})();
   (async function ensureSession(){
     const { data:{ session } } = await sb.auth.getSession();
-    if(!session){ await sb.auth.signInAnonymously().catch(()=>{}); }
+    if(!session){ await sb.auth.signInAnonymously().catch(()=>{}); } // you can remove this later if you like
     const { data:{ user } } = await sb.auth.getUser();
     dAuth.textContent = user? 'Session' : 'No session';
   })();
@@ -352,7 +379,7 @@
   });
   $('signOut').addEventListener('click', ()=> sb.auth.signOut().then(()=>location.reload()));
 
-  // === Email + Password auth (works in PWA & web) ===
+  // === Email + Password auth ===
   const signInBtn = $('signInBtn');
   const pwDlg     = $('pwDlg');
   const loginEmail= $('loginEmail');
@@ -375,10 +402,14 @@
       email: (loginEmail.value||'').trim(),
       password: loginPass.value||''
     });
-    if (error) { authMsg.textContent = 'Error: ' + error.message; return; }
+    if (error) {
+      if (/Email not confirmed/i.test(error.message)) authMsg.textContent = 'Email not confirmed. Use reset link or check your inbox.';
+      else if (/Invalid login credentials/i.test(error.message)) authMsg.textContent = 'Invalid email or password. Try Reset or Create Account.';
+      else authMsg.textContent = 'Error: ' + error.message;
+      return;
+    }
     authMsg.textContent = 'Signed in!';
     pwDlg.close();
-    // Optionally refresh data/UI here without full reload.
     const rows = await fetchEntries(); allRows=rows; renderTable(applySearch(allRows)); buildCharts(allRows); buildSnapshot(allRows);
   });
 
@@ -393,6 +424,34 @@
       : 'Account created. If email confirmation is on, check your inbox, then Sign In.';
   });
 
+  // === Set password for the CURRENT logged-in user ===
+  const setPwBtn = $('setPwBtn');
+  const setPwDlg = $('setPwDlg');
+  const newPass  = $('newPass');
+  const newPass2 = $('newPass2');
+  const setPwMsg = $('setPwMsg');
+  const doSetPw  = $('doSetPw');
+
+  setPwBtn?.addEventListener('click', ()=> {
+    setPwMsg.textContent = '';
+    newPass.value = '';
+    newPass2.value = '';
+    setPwDlg.showModal();
+  });
+
+  doSetPw?.addEventListener('click', async (e)=>{
+    e.preventDefault();
+    const p1 = newPass.value || '';
+    const p2 = newPass2.value || '';
+    if (p1.length < 6) { setPwMsg.textContent = 'Password must be at least 6 characters.'; return; }
+    if (p1 !== p2)     { setPwMsg.textContent = 'Passwords do not match.'; return; }
+    setPwMsg.textContent = 'Updating…';
+    const { error } = await sb.auth.updateUser({ password: p1 });
+    if (error) { setPwMsg.textContent = 'Error: ' + error.message; return; }
+    setPwMsg.textContent = 'Password set! You can now sign in anywhere.';
+    setTimeout(()=> setPwDlg.close(), 600);
+  });
+
   sb.auth.onAuthStateChange((_evt, session) => {
     const authed = !!session;
     const signOutBtn = $('signOut');
@@ -400,7 +459,12 @@
     dAuth.textContent = authed ? 'Session' : 'No session';
   });
 
-  // Elements
+  // ====== APP LOGIC (unchanged beyond tiny UX tweaks) ======
+
+  function dowIndex(dateStr){ return DateTime.fromFormat(dateStr,'yyyy-MM-dd',{zone:ZONE}).weekday % 7; }
+
+  function routeEndTime(){ return ($('returnTime').value || $('end').value || ''); }
+
   const date=$('date'), route=$('route'), start=$('start'), end=$('end'), departTime=$('departTime'), returnTime=$('returnTime');
   const parcels=$('parcels'), letters=$('letters'), miles=$('miles'), mood=$('mood'), notes=$('notes');
   const weather=$('weather'), temp=$('temp'), boxholders=$('boxholders');
@@ -408,13 +472,12 @@
   const officeH=$('officeH'), routeH=$('routeH'), totalH=$('totalH');
   const expEnd=$('expEnd'), expMeta=$('expMeta');
   const badgeVolume=$('badgeVolume'), badgeRouteEff=$('badgeRouteEff'), badgeOverall=$('badgeOverall');
+  const dConnEl=$('dConn'), dAuthEl=$('dAuth'), dWriteEl=$('dWrite');
 
-  // Tooltips
   badgeVolume.title   = 'Volume = parcels + 0.33×letters (rank vs recent, 0–10)';
   badgeRouteEff.title = 'Route Efficiency = today’s street hours vs typical for this weekday (0–10)';
   badgeOverall.title  = 'Overall = total hours vs expected (weekday avg)';
 
-  // Defaults
   date.value = todayStr();
   route.value = 'R1';
 
@@ -726,10 +789,10 @@
     const dl = blend(lCarry, lTarget);
 
     const fmt = p => {
-  if (p == null) return '—';
-  const rounded = Math.round(p);
-  return rounded >= 0 ? `↑ ${rounded}%` : `↓ ${Math.abs(rounded)}%`;
-};
+      if (p == null) return '—';
+      const rounded = Math.round(p);
+      return rounded >= 0 ? `↑ ${rounded}%` : `↓ ${Math.abs(rounded)}%`;
+    };
     const setPill=(el,delta)=>{ el.textContent=fmt(delta); el.className='pill '+(delta==null?'warn':delta>=0?'up':'down'); };
     setPill($('wkHoursDelta'),   dh);
     setPill($('wkParcelsDelta'), dp);
@@ -773,7 +836,7 @@
     $('date').value=todayStr(); await loadByDate(); const rows=await fetchEntries(); allRows=rows; renderTable(applySearch(allRows)); buildCharts(allRows); buildSnapshot(allRows); computeBreakdown();
   })();
 
-  console.log('Route Stats loaded — v2025-08-27-patched');
+  console.log('Route Stats loaded — v2025-08-27-patched+setpw');
 </script>
 <!-- Register the service worker for offline support -->
 <script>
