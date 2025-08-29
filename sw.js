@@ -7,13 +7,16 @@
 // on a miss. For cross‑origin requests we try the network first
 // and fall back to the cache if the network is unavailable.
 
-const CACHE_NAME = 'route-stats-cache-v1';
+const CACHE_NAME = 'route-stats-cache-v007';
 const STATIC_ASSETS = [
   './',
   './index.html',
   './manifest.json',
   './icon-192.png',
+  './icon-180.png',
   './icon-512.png'
+  
+  
 ];
 
 self.addEventListener('install', event => {
@@ -73,23 +76,13 @@ async function networkFirst(request) {
 }
 
 self.addEventListener('fetch', event => {
-  // Only intercept GET requests
   if (event.request.method !== 'GET') {
-    return;
-  }
-  // For navigation requests (e.g. clicking links, entering a URL) use network‑first.
-  // This ensures that magic‑link callbacks and other dynamic pages are fetched
-  // from the network rather than served from an old cache.
-  if (event.request.mode === 'navigate') {
-    event.respondWith(networkFirst(event.request));
     return;
   }
   const url = new URL(event.request.url);
   if (url.origin === self.location.origin) {
-    // For same‑origin subresources use cache‑first
     event.respondWith(cacheFirst(event.request));
   } else {
-    // For cross‑origin requests fall back to network‑first
     event.respondWith(networkFirst(event.request));
   }
 });
