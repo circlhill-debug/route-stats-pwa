@@ -98,7 +98,7 @@
 </div>
 <header>
   <div class="wrap row" style="justify-content:space-between">
-    <h1>📈 ROUTE STATS — Live Dashboard — Aug 24, 2025</h1>
+    <h1>📈 ROUTE STATS — Live Dashboard — <span id="headerDate">—</span></h1>
     <div class="row">
       <button id="signInBtn" class="ghost">Sign in</button>
       <button id="setPwBtn" class="ghost" title="Set/Change password for the current account">Set password</button>
@@ -307,6 +307,14 @@
 <button class="fab" id="fab">+ Add Entry</button>
 
 <script src="https://cdn.jsdelivr.net/npm/luxon@3/build/global/luxon.min.js"></script>
+  <script>
+  (function(){
+    const ZONE = 'America/Detroit';
+    const DateTime = luxon.DateTime;
+    const el = document.getElementById('headerDate');
+    if (el) el.textContent = DateTime.now().setZone(ZONE).toFormat('MMM d, yyyy');
+  })();
+</script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
