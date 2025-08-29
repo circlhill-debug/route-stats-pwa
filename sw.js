@@ -7,7 +7,7 @@
 // on a miss. For cross‑origin requests we try the network first
 // and fall back to the cache if the network is unavailable.
 
-const CACHE_NAME = 'route-stats-cache-v007';
+const CACHE_NAME = 'route-stats-cache-v008';
 const STATIC_ASSETS = [
   './',
   './index.html',
