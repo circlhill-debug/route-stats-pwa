@@ -11,7 +11,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 <meta name="apple-mobile-web-app-title" content="RouteStats" />
 <title>Route Stats — Live Dashboard</title>
-  <link rel="manifest" href="manifest.json">
+<link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icon-180.png">
 <script src="sw-register.js"></script>
 <style>
@@ -307,7 +307,7 @@
 <button class="fab" id="fab">+ Add Entry</button>
 
 <script src="https://cdn.jsdelivr.net/npm/luxon@3/build/global/luxon.min.js"></script>
-  <script>
+<script>
   (function(){
     const ZONE = 'America/Detroit';
     const DateTime = luxon.DateTime;
@@ -342,6 +342,22 @@
   }
   function routeEndTime(){ return ($('returnTime').value || $('end').value || ''); }
 
+  // NEW: moon phase helper
+  function moonPhaseEmoji(dISO) {
+    const lp = 2551443; // lunar period in seconds
+    const now = DateTime.fromISO(dISO, {zone: ZONE}).toSeconds();
+    const ref = DateTime.fromISO("2001-01-01", {zone: ZONE}).toSeconds();
+    const phase = ((now - ref) % lp) / lp;
+    if (phase < 0.03 || phase > 0.97) return "🌑";
+    if (phase < 0.25) return "🌒";
+    if (phase < 0.27) return "🌓";
+    if (phase < 0.48) return "🌔";
+    if (phase < 0.52) return "🌕";
+    if (phase < 0.75) return "🌖";
+    if (phase < 0.77) return "🌗";
+    return "🌘";
+  }
+
   // Supabase
   const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON, { auth:{ persistSession:true }});
 
@@ -374,7 +390,7 @@
   (async ()=>{ try{ await fetch(SUPABASE_URL,{mode:'no-cors'}); dConn.textContent='Connected'; }catch{ dConn.textContent='Error'; }})();
   (async function ensureSession(){
     const { data:{ session } } = await sb.auth.getSession();
-    if(!session){ await sb.auth.signInAnonymously().catch(()=>{}); } // you can remove this later if you like
+    if(!session){ await sb.auth.signInAnonymously().catch(()=>{}); }
     const { data:{ user } } = await sb.auth.getUser();
     dAuth.textContent = user? 'Session' : 'No session';
   })();
@@ -463,11 +479,22 @@
     setTimeout(()=> setPwDlg.close(), 600);
   });
 
-  sb.auth.onAuthStateChange((_evt, session) => {
+  // PATCH: refresh UI after auth state restores so form pre-fills
+  sb.auth.onAuthStateChange(async (_evt, session) => {
     const authed = !!session;
     const signOutBtn = $('signOut');
     if (signOutBtn) signOutBtn.style.display = authed ? 'inline-block' : 'none';
     dAuth.textContent = authed ? 'Session' : 'No session';
+    if (authed) {
+      await loadByDate?.();
+      const rows = await fetchEntries?.();
+      if (rows) {
+        allRows = rows;
+        renderTable(applySearch(allRows));
+        buildCharts?.(allRows);
+        buildSnapshot?.(allRows);
+      }
+    }
   });
 
   // ====== APP LOGIC (unchanged beyond tiny UX tweaks) ======
@@ -667,6 +694,7 @@
 
   function classifyRow(total, avg){ if(total==null||avg==null) return ''; const diff=(total-avg)/avg; if(diff<=-0.15) return 'light'; if(diff>=0.15) return 'heavy'; return 'typical'; }
 
+  // PATCH: include weekday shorthand + moon emoji in the Date column
   function renderTable(rows){
     const tbody=document.querySelector('#tbl tbody'); tbody.innerHTML='';
     const byDow=Array.from({length:7},()=>[]);
@@ -676,7 +704,12 @@
       const tot=Number(r.hours||0)||null; const offH=(r.office_minutes!=null)? Number(r.office_minutes).toFixed(2):''; const rteH=(r.route_minutes!=null)? Number(r.route_minutes).toFixed(2):'';
       const d=dowIndex(r.work_date); const avg=avgByDow[d]; const cls=classifyRow(tot,avg);
       const tr=document.createElement('tr'); tr.classList.add('rowLink'); if(cls) tr.classList.add(cls); tr.dataset.date=r.work_date; tr.tabIndex=0;
-      tr.innerHTML = `<td>${r.work_date}</td><td>R1</td><td>${r.status||'worked'}</td>
+
+      const dObj = DateTime.fromISO(r.work_date, { zone: ZONE });
+      const dowShort = dObj.toFormat('ccc').charAt(0); // M/T/W/…
+      const moon = moonPhaseEmoji(r.work_date);
+
+      tr.innerHTML = `<td>${r.work_date} (${dowShort}) ${moon}</td><td>R1</td><td>${r.status||'worked'}</td>
         <td class="right">${offH}</td><td class="right">${rteH}</td><td class="right">${tot!=null? tot.toFixed(2):''}</td>
         <td class="right">${r.parcels||0}</td><td class="right">${r.letters||0}</td><td class="right">${r.miles||0}</td>
         <td>${r.weather_json||''}</td>`;
@@ -810,7 +843,10 @@
     setPill($('wkLettersDelta'), dl);
 
     // Today vs same-weekday baseline (worked days only)
+    const today=DateTime.now().setZone(ZONE);
     const todayIso = today.toISODate();
+    const dow=today.weekday%7;
+    const workRows=rows.filter(r=>r.status!=='off');
     const todaysRow = workRows.find(r => r.work_date === todayIso);
     const sameDow = workRows.filter(r => r.work_date !== todayIso && (dowIndex(r.work_date) === dow));
     const meanOf=(arr,fn)=> arr.length? arr.reduce((t,x)=>t+(fn(x)||0),0)/arr.length : null;
@@ -837,18 +873,13 @@
   $('fab').addEventListener('click',()=>{ window.scrollTo({ top:0, behavior:'smooth' }); $('departTime').focus(); });
   $('searchBox').addEventListener('input', ()=>{ renderTable(applySearch(allRows)); });
 
-  (function enableRowNavigation(){
-    const tbody=document.querySelector('#tbl tbody'); if(!tbody) return; function activate(e){ const tr=e.target.closest('tr.rowLink'); if(!tr) return; $('date').value=tr.dataset.date; loadByDate(); window.scrollTo({ top:0, behavior:'smooth' }); }
-    tbody.addEventListener('click', activate);
-    tbody.addEventListener('keydown', (e)=>{ if(e.key==='Enter' || e.key===' '){ if(e.target.closest('tr.rowLink')){ e.preventDefault(); activate(e); } } });
-  })();
-
   (async()=>{
     $('date').value=todayStr(); await loadByDate(); const rows=await fetchEntries(); allRows=rows; renderTable(applySearch(allRows)); buildCharts(allRows); buildSnapshot(allRows); computeBreakdown();
   })();
 
   console.log('Route Stats loaded — v2025-08-27-patched+setpw');
 </script>
+
 <!-- Register the service worker for offline support -->
 <script>
   if ('serviceWorker' in navigator) {
