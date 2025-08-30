@@ -1,95 +1,56 @@
-// Service Worker for Route Stats PWA
-//
-// This service worker implements an offline‑first caching strategy.
-// During installation the static assets defined in STATIC_ASSETS are
-// pre‑cached. When fetching resources from the same origin we first
-// attempt to serve them from the cache, falling back to the network
-// on a miss. For cross‑origin requests we try the network first
-// and fall back to the cache if the network is unavailable.
-
-const CACHE_NAME = 'route-stats-cache-v1';
-const STATIC_ASSETS = [
+/* Route Stats SW — SAFE, SAME-ORIGIN GET ONLY */
+const CACHE_NAME = 'route-stats-cache-v027';
+const CORE_ASSETS = [
   './',
   './index.html',
   './manifest.json',
+  './icon-180.png',
   './icon-192.png',
   './icon-512.png'
 ];
 
-self.addEventListener('install', event => {
+self.addEventListener('install', (event) => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then(cache => {
-      return cache.addAll(STATIC_ASSETS);
-    })
+    caches.open(CACHE_NAME).then((cache) => cache.addAll(CORE_ASSETS)).then(() => self.skipWaiting())
   );
-  // Immediately take control after installation
-  self.skipWaiting();
 });
 
-self.addEventListener('activate', event => {
+self.addEventListener('activate', (event) => {
   event.waitUntil(
-    caches.keys().then(cacheNames => {
-      return Promise.all(
-        cacheNames.map(name => {
-          if (name !== CACHE_NAME) {
-            return caches.delete(name);
-          }
-        })
-      );
-    })
+    caches.keys().then(keys => Promise.all(keys.map(k => k === CACHE_NAME ? null : caches.delete(k))))
+      .then(() => self.clients.claim())
   );
-  self.clients.claim();
 });
 
-async function cacheFirst(request) {
-  const cached = await caches.match(request);
-  if (cached) {
-    return cached;
-  }
-  try {
-    const networkResponse = await fetch(request);
-    if (networkResponse && networkResponse.ok) {
-      const cache = await caches.open(CACHE_NAME);
-      cache.put(request, networkResponse.clone());
-    }
-    return networkResponse;
-  } catch (error) {
-    return cached;
-  }
-}
+self.addEventListener('fetch', (event) => {
+  const req = event.request;
+  if (req.method !== 'GET') return;
+  const url = new URL(req.url);
+  if (url.origin !== self.location.origin) return;
 
-async function networkFirst(request) {
-  try {
-    const networkResponse = await fetch(request);
-    if (networkResponse && networkResponse.ok) {
-      const cache = await caches.open(CACHE_NAME);
-      cache.put(request, networkResponse.clone());
-    }
-    return networkResponse;
-  } catch (error) {
-    const cached = await caches.match(request);
-    return cached;
-  }
-}
-
-self.addEventListener('fetch', event => {
-  // Only intercept GET requests
-  if (event.request.method !== 'GET') {
+  if (req.mode === 'navigate') {
+    event.respondWith((async () => {
+      try {
+        const fresh = await fetch(req);
+        const cache = await caches.open(CACHE_NAME);
+        cache.put(req, fresh.clone());
+        return fresh;
+      } catch {
+        const cache = await caches.open(CACHE_NAME);
+        const cached = await cache.match('./index.html');
+        return cached || Response.error();
+      }
+    })());
     return;
   }
-  // For navigation requests (e.g. clicking links, entering a URL) use network‑first.
-  // This ensures that magic‑link callbacks and other dynamic pages are fetched
-  // from the network rather than served from an old cache.
-  if (event.request.mode === 'navigate') {
-    event.respondWith(networkFirst(event.request));
-    return;
-  }
-  const url = new URL(event.request.url);
-  if (url.origin === self.location.origin) {
-    // For same‑origin subresources use cache‑first
-    event.respondWith(cacheFirst(event.request));
-  } else {
-    // For cross‑origin requests fall back to network‑first
-    event.respondWith(networkFirst(event.request));
-  }
+
+  event.respondWith((async () => {
+    const cache = await caches.open(CACHE_NAME);
+    const cached = await cache.match(req);
+    const fetchPromise = fetch(req).then(networkResp => {
+      cache.put(req, networkResp.clone());
+      return networkResp;
+    }).catch(() => cached);
+    return cached || fetchPromise;
+  })());
 });
