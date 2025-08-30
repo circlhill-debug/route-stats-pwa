@@ -435,7 +435,7 @@
     return;
   }
 
-  // Wait briefly for Supabase to attach the session
+  // iOS/PWA quirk: wait a beat for the session to attach
   let session = null, tries = 0;
   while (!session && tries++ < 10) {
     const r = await sb.auth.getSession();
@@ -747,8 +747,29 @@
   $('exportCsv').addEventListener('click', async ()=>{ const rows = allRows.length? allRows : await fetchEntries(); const blob=new Blob([toCsv(rows)],{type:'text/csv'}); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=`route-stats-all_${VERSION_TAG}.csv`; a.click(); });
   $('exportCsvFiltered').addEventListener('click', async ()=>{ const rows = applySearch(allRows.length? allRows : await fetchEntries()); const blob=new Blob([toCsv(rows)],{type:'text/csv'}); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=`route-stats-filtered_${VERSION_TAG}.csv`; a.click(); });
 
-  const showUidBtn=$('showUid');
-  showUidBtn?.addEventListener('click', async ()=>{ const { data:{ user } } = await sb.auth.getUser(); if(!user){ alert('No session. Use Link devices.'); return; } alert(`Current user id (account key):\n${user.id}\n\nEntries are filtered by this id.`); });
+const showUidBtn=$('showUid');
+showUidBtn?.addEventListener('click', async (e)=>{
+  e.preventDefault();
+  try {
+    // Give Supabase a moment to restore/attach the session (PWA/iOS)
+    let { data:{ session } } = await sb.auth.getSession();
+    if (!session) {
+      let tries = 0;
+      while (!session && tries++ < 10) {
+        await new Promise(r => setTimeout(r, 150));
+        ({ data:{ session } } = await sb.auth.getSession());
+      }
+    }
+    if (!session) { alert('No session yet. Please Sign in first.'); return; }
+
+    const { data:{ user } } = await sb.auth.getUser();
+    if (!user) { alert('No session. Try signing in again.'); return; }
+
+    alert(`Current user id (account key):\n${user.id}\n\nEntries are filtered by this id.`);
+  } catch {
+    alert('Could not fetch user. Try signing in again.');
+  }
+});
 
   const importFile=$('importFile'); $('importCsv')?.addEventListener('click', ()=> importFile.click());
   importFile?.addEventListener('change', async ()=>{
@@ -939,6 +960,61 @@
   });
 
   // Optional: surface runtime errors in the top diag bar so we notice them on iPhone
+  (function(){
+    const diag = document.getElementById('diag');
+    window.addEventListener('error', (ev) => {
+      if (!diag) return;
+      const msg = (ev?.error?.message) || ev.message || String(ev);
+      diag.innerHTML += ` · <b style="color:#ff8fa1">ERR</b>: ${msg}`;
+    });
+    window.addEventListener('unhandledrejection', (ev) => {
+      if (!diag) return;
+      const msg = (ev?.reason?.message) || String(ev.reason);
+      diag.innerHTML += ` · <b style="color:#ff8fa1">ERR</b>: ${msg}`;
+    });
+  })();
+</script
+  <script>
+  // Delegated wiring so buttons still work even if early bindings fail
+  document.addEventListener('click', async (e) => {
+    const id = (e.target && e.target.id) || (e.target.closest && (e.target.closest('button')?.id));
+    if (!id) return;
+
+    if (id === 'signInBtn') {
+      e.preventDefault();
+      const dlg = document.getElementById('pwDlg');
+      if (dlg && typeof dlg.showModal === 'function') dlg.showModal();
+      else alert('Sign-in dialog not available on this browser.');
+    }
+
+    if (id === 'signOut') {
+      e.preventDefault();
+      try { await sb.auth.signOut(); } catch {}
+      location.reload();
+    }
+
+    if (id === 'showUid') {
+      e.preventDefault();
+      try {
+        let { data:{ session } } = await sb.auth.getSession();
+        if (!session) {
+          let tries = 0;
+          while (!session && tries++ < 10) {
+            await new Promise(r => setTimeout(r, 150));
+            ({ data:{ session } } = await sb.auth.getSession());
+          }
+        }
+        if (!session) { alert('No session yet. Please Sign in first.'); return; }
+        const { data:{ user } } = await sb.auth.getUser();
+        if (!user) { alert('No session. Try signing in again.'); return; }
+        alert(`Current user id (account key):\n${user.id}\n\nEntries are filtered by this id.`);
+      } catch {
+        alert('Could not fetch user. Try signing in again.');
+      }
+    }
+  });
+
+  // Surface runtime errors in the diag bar (for quick iPhone debugging)
   (function(){
     const diag = document.getElementById('diag');
     window.addEventListener('error', (ev) => {
