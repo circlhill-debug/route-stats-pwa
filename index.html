@@ -421,23 +421,41 @@
   });
 
   doLogin?.addEventListener('click', async (e)=>{
-    e.preventDefault();
-    authMsg.textContent = 'Signing in…';
-    const { error } = await sb.auth.signInWithPassword({
-      email: (loginEmail.value||'').trim(),
-      password: loginPass.value||''
-    });
-    if (error) {
-      if (/Email not confirmed/i.test(error.message)) authMsg.textContent = 'Email not confirmed. Use reset link or check your inbox.';
-      else if (/Invalid login credentials/i.test(error.message)) authMsg.textContent = 'Invalid email or password. Try Reset or Create Account.';
-      else authMsg.textContent = 'Error: ' + error.message;
-      return;
-    }
-    authMsg.textContent = 'Signed in!';
-    pwDlg.close();
-    const rows = await fetchEntries(); allRows=rows; renderTable(applySearch(allRows)); buildCharts(allRows); buildSnapshot(allRows);
-  });
+  e.preventDefault();
+  authMsg.textContent = 'Signing in…';
 
+  const email = (loginEmail.value||'').trim();
+  const password = loginPass.value||'';
+
+  const { error } = await sb.auth.signInWithPassword({ email, password });
+  if (error) {
+    if (/Email not confirmed/i.test(error.message)) authMsg.textContent = 'Email not confirmed. Use reset link or check your inbox.';
+    else if (/Invalid login credentials/i.test(error.message)) authMsg.textContent = 'Invalid email or password. Try Reset or Create Account.';
+    else authMsg.textContent = 'Error: ' + error.message;
+    return;
+  }
+
+  // Wait briefly for Supabase to attach the session
+  let session = null, tries = 0;
+  while (!session && tries++ < 10) {
+    const r = await sb.auth.getSession();
+    session = r?.data?.session || null;
+    if (!session) await new Promise(r => setTimeout(r, 150));
+  }
+
+  authMsg.textContent = session ? 'Signed in!' : 'Signed in (pending session)…';
+  pwDlg.close();
+
+  // Refresh UI/data so form pre-fills
+  const rows = await (typeof fetchEntries === 'function' ? fetchEntries() : Promise.resolve([]));
+  if (rows && rows.length >= 0) {
+    window.allRows = rows;
+    if (typeof loadByDate === 'function') await loadByDate();
+    if (typeof renderTable === 'function') renderTable(applySearch(rows));
+    if (typeof buildCharts === 'function') buildCharts(rows);
+    if (typeof buildSnapshot === 'function') buildSnapshot(rows);
+  }
+});
   doSignup?.addEventListener('click', async ()=>{
     authMsg.textContent = 'Creating account…';
     const { error } = await sb.auth.signUp({
@@ -896,16 +914,28 @@
       location.reload();
     }
 
-    if (id === 'showUid') {
-      e.preventDefault();
-      try {
-        const { data:{ user } } = await sb.auth.getUser();
-        if (!user) { alert('No session. Use Link devices or Sign in.'); return; }
-        alert(`Current user id (account key):\n${user.id}\n\nEntries are filtered by this id.`);
-      } catch (err) {
-        alert('Could not fetch user. Try signing in again.');
+  if (id === 'showUid') {
+  e.preventDefault();
+  try {
+    // Prefer a current session; give it a moment to restore if needed
+    let { data:{ session } } = await sb.auth.getSession();
+    if (!session) {
+      let tries = 0;
+      while (!session && tries++ < 10) {
+        await new Promise(r => setTimeout(r, 150));
+        ({ data:{ session } } = await sb.auth.getSession());
       }
     }
+    if (!session) { alert('No session yet. Please Sign in first.'); return; }
+
+    const { data:{ user } } = await sb.auth.getUser();
+    if (!user) { alert('No session. Try signing in again.'); return; }
+
+    alert(`Current user id (account key):\n${user.id}\n\nEntries are filtered by this id.`);
+  } catch (err) {
+    alert('Could not fetch user. Try signing in again.');
+  }
+}
   });
 
   // Optional: surface runtime errors in the top diag bar so we notice them on iPhone
