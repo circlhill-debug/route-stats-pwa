@@ -3,14 +3,16 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<!-- Progressive Web App metadata -->
+
+<!-- PWA meta -->
 <meta name="theme-color" content="#2b7fff" />
 <meta name="apple-mobile-web-app-capable" content="yes" />
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 <meta name="apple-mobile-web-app-title" content="RouteStats" />
-<title>Route Stats — Live Dashboard</title>
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icon-180.png">
+
+<title>Route Stats — Live Dashboard</title>
 <style>
   :root{
     --bg:#0f1115; --card:#141821; --border:#22262e; --text:#e8e8ea; --muted:#9aa0aa; --brand:#2b7fff;
@@ -19,13 +21,14 @@
   *{box-sizing:border-box}
   body{ margin:0; background:var(--bg); color:var(--text); font-family:system-ui,-apple-system,Inter,Segoe UI,Roboto,Arial,sans-serif }
   header{ border-bottom:1px solid var(--border); padding:14px 16px }
-  .wrap{ max-width:1120px; margin:0 auto; padding:16px }
+  .wrap{ max-width:1180px; margin:0 auto; padding:16px }
   h1{ margin:0; font-size:20px; letter-spacing:.3px }
   .grid{ display:grid; gap:12px }
-  @media(min-width:1000px){ .grid-2{ grid-template-columns:1.1fr .9fr } }
+  @media(min-width:1000px){ .grid-2{ grid-template-columns:1.2fr .8fr } }
   .card{ background:var(--card); border:1px solid var(--border); border-radius:14px; padding:14px }
   label{ font-size:13px; color:var(--muted) }
-  input,select,textarea{ width:100%; padding:12px; background:transparent; border:1px solid var(--border); border-radius:10px; color:var(--text); font-size:15px }
+  input,select,textarea{ width:100%; padding:12px; background:transparent; border:1px solid var(--border);
+    border-radius:10px; color:var(--text); font-size:15px }
   button{ background:var(--brand); color:#fff; border:0; border-radius:10px; padding:10px 14px; font-weight:700; cursor:pointer }
   button.ghost{ background:transparent; color:var(--text); border:1px solid var(--border) }
   small{ color:var(--muted) }
@@ -33,195 +36,80 @@
   th,td{ border-bottom:1px solid var(--border); padding:8px 6px; text-align:left }
   th{ color:var(--muted); font-weight:600 }
   .right{ text-align:right }
-  .pill{ display:inline-flex; gap:8px; align-items:center; border:1px solid var(--border); padding:6px 8px; border-radius:999px; background:transparent }
-  .stat{ display:flex; flex-direction:column; gap:4px; padding:10px; border:1px solid var(--border); border-radius:12px; min-width:140px }
-  .up{ color:var(--good) } .down{ color:var(--bad) } .warn{ color:var(--warn) }
-  canvas{ background:transparent; border:1px solid var(--border); border-radius:10px; padding:8px }
+  .pill{ display:inline-flex; gap:8px; align-items:center; border:1px solid var(--border); padding:6px 8px;
+    border-radius:999px; background:transparent }
+  .row{ display:flex; gap:10px; flex-wrap:wrap; align-items:center }
+  dialog{ background:var(--card); color:var(--text); border:1px solid var(--border); border-radius:12px; padding:16px }
   .fab{ position:fixed; right:16px; bottom:16px; z-index:10 }
   #diag{ position:sticky; top:0; z-index:999; background:#111; color:#ddd; font:12px/1.35 system-ui; padding:6px 10px; border-bottom:1px solid #222 }
   #diag b{ color:#fff }
   tr.light td{ background:linear-gradient(90deg, rgba(124,227,139,.07), transparent) }
   tr.heavy td{ background:linear-gradient(90deg, rgba(255,143,161,.10), transparent) }
   tr.typical td{ background:linear-gradient(90deg, rgba(255,210,122,.08), transparent) }
-  .row{ display:flex; gap:10px; flex-wrap:wrap; align-items:center }
-  dialog{ background:var(--card); color:var(--text); border:1px solid var(--border); border-radius:12px; padding:16px }
-
-  /* Visibility + focus upgrades */
-  input,select,textarea{
-    background:#0b0f15;
-    border:1px solid #303643;
-    font-size:16px;
-    caret-color:var(--brand);
-  }
-  input:hover,select:hover,textarea:hover{ border-color:#3d4554 }
-  input:focus-visible,select:focus-visible,textarea:focus-visible{
-    outline:2px solid var(--brand);
-    outline-offset:0;
-    border-color:var(--brand);
-    box-shadow:0 0 0 3px rgba(43,127,255,.25);
-    background:#0c1220;
-  }
-  ::placeholder{ color:#b7beca; opacity:1 }
-  .card .grid > div:has(> input:focus-visible),
-  .card .grid > div:has(> select:focus-visible),
-  .card .grid > div:has(> textarea:focus-visible){
-    background:#101726;
-    border-radius:10px;
-    padding:6px;
-    transition:background .15s ease;
-  }
-
-  /* Save feedback */
-  button.saving{ opacity:.7; cursor:wait }
-  @keyframes savedFlash{
-    0%{ box-shadow:0 0 0 0 rgba(43,127,255,.6) }
-    100%{ box-shadow:0 0 0 14px rgba(43,127,255,0) }
-  }
-  button.savedFlash{ animation:savedFlash 600ms ease-out }
-
-  /* Clickable results */
-  #tbl tbody tr.rowLink{ cursor:pointer }
-  #tbl tbody tr.rowLink:hover td{ background:rgba(43,127,255,.06) }
 </style>
 </head>
 <body>
 <div id="diag">
-  ROUTE STATS · Supabase: <b id="dConn">…</b> · Auth: <b id="dAuth">…</b> · Write: <b id="dWrite">—</b>
+  ROUTE STATS · Supabase: <b id="dConn">…</b> · Auth: <b id="dAuth">…</b> · Version: <b>v2025-08-27-fullfix</b>
 </div>
 
-<!-- Version tag -->
-<div style="position:fixed;top:6px;right:12px;color:#9aa0aa;font-size:11px;z-index:9999;">
-  v2025-08-27-patched+setpw+fix1
-</div>
 <header>
   <div class="wrap row" style="justify-content:space-between">
     <h1>📈 ROUTE STATS — Live Dashboard — <span id="headerDate">—</span></h1>
     <div class="row">
       <button id="signInBtn" class="ghost">Sign in</button>
       <button id="setPwBtn" class="ghost" title="Set/Change password for the current account">Set password</button>
-      <button id="linkBtn" class="ghost">Link devices (magic link)</button>
-      <button id="signOut" class="ghost">Sign out</button>
+      <button id="linkBtn" class="ghost">Link devices</button>
+      <button id="signOut" class="ghost" style="display:none">Sign out</button>
     </div>
   </div>
 </header>
 
 <main class="wrap grid grid-2">
-  <!-- SNAPSHOT -->
+  <!-- Snapshot -->
   <section class="card">
     <div class="row" style="justify-content:space-between;align-items:flex-start;flex-wrap:wrap">
       <div class="row" style="gap:8px;align-items:stretch">
-        <div class="stat">
-          <small>Expected End (today)</small>
-          <strong id="expEnd" style="font-size:20px">—</strong>
-          <small id="expMeta" style="color:var(--muted)">DOW avg —</small>
-        </div>
-        <div class="stat">
-          <small>Volume</small>
-          <strong id="badgeVolume" style="font-size:20px">—</strong>
-          <small class="muted">parcels + 0.33×letters</small>
-        </div>
-        <div class="stat">
-          <small>Route Eff.</small>
-          <strong id="badgeRouteEff" style="font-size:20px">—</strong>
-          <small class="muted">vs weekday baseline</small>
-        </div>
-        <div class="stat">
-          <small>Overall</small>
-          <strong id="badgeOverall" style="font-size:20px">—</strong>
-          <small class="muted">office + route vs expected</small>
-        </div>
+        <div class="pill"><small>Week Hours</small> <b id="wkHours">—</b> <span id="wkHoursDelta" class="pill">—</span></div>
+        <div class="pill"><small>Week Parcels</small> <b id="wkParcels">—</b> <span id="wkParcelsDelta" class="pill">—</span></div>
+        <div class="pill"><small>Week Letters</small> <b id="wkLetters">—</b> <span id="wkLettersDelta" class="pill">—</span></div>
       </div>
       <div class="row" style="gap:8px;align-items:stretch">
-        <div class="stat">
-          <small>Hours (week)</small>
-          <div><strong id="wkHours">—</strong> <span id="wkHoursDelta" class="pill">—</span></div>
-        </div>
-        <div class="stat">
-          <small>Parcels (week)</small>
-          <div><strong id="wkParcels">—</strong> <span id="wkParcelsDelta" class="pill">—</span></div>
-        </div>
-        <div class="stat">
-          <small>Letters (week)</small>
-          <div><strong id="wkLetters">—</strong> <span id="wkLettersDelta" class="pill">—</span></div>
-        </div>
-        <!-- Today vs same-weekday pills -->
-        <div class="stat">
-          <small>Today Parcels Δ</small>
-          <div><strong id="todayParcelsDelta">—</strong></div>
-          <small class="muted">vs past same weekday (worked)</small>
-        </div>
-        <div class="stat">
-          <small>Today Letters Δ</small>
-          <div><strong id="todayLettersDelta">—</strong></div>
-          <small class="muted">vs past same weekday (worked)</small>
-        </div>
+        <div class="pill"><small>Today Parcels Δ</small> <b id="todayParcelsDelta">—</b></div>
+        <div class="pill"><small>Today Letters Δ</small> <b id="todayLettersDelta">—</b></div>
       </div>
     </div>
   </section>
 
-  <!-- FORM -->
+  <!-- Form -->
   <section class="card">
     <h3 style="margin:0 0 8px 0">Add Entry</h3>
-
-    <div class="row" style="margin:6px 0 10px 0; gap:8px; flex-wrap:wrap">
-      <button id="btnStartNow" class="ghost">Start (now)</button>
-      <button id="btnStreetNow" class="ghost">Hit Street (now)</button>
-      <button id="btnClockNow" class="ghost">Clock Out (now)</button>
-      <!-- Quick actions -->
-      <button id="btnEditLast" class="ghost">Edit last entry</button>
-      <button id="btnDeleteDay" class="ghost" style="border-color:#ff8fa1;color:#ff8fa1">Delete this day</button>
-      <button id="btnUndoDelete" class="ghost" style="display:none">Undo delete</button>
-    </div>
-
     <div class="grid" style="grid-template-columns:repeat(2,1fr);gap:10px">
       <div><label>Date</label><input id="date" type="date"></div>
+      <div><label>Route</label><input id="route" type="text" value="R1" readonly></div>
 
-      <div>
-        <label>Route</label>
-        <input id="route" type="text" value="R1" readonly>
-      </div>
+      <div><label>Start</label><input id="start" type="time" value="08:00"></div>
+      <div><label>Hit Street</label><input id="departTime" type="time" placeholder="--:--"></div>
 
-      <div><label>Start (defaults 08:00)</label><div class="row"><input id="start" type="time" value="08:00"><button id="btnStartNow2" class="ghost">Now</button></div></div>
-      <div><label>Hit Street</label><div class="row"><input id="departTime" type="time" placeholder="--:--"><button id="btnStreetNow2" class="ghost">Now</button></div></div>
-
-      <div><label>Return (optional)</label><div class="row"><input id="returnTime" type="time" placeholder="--:--"><button id="btnReturnNow" class="ghost">Now</button></div></div>
-      <div><label>Clock Out</label><div class="row"><input id="end" type="time" placeholder="--:--"><button id="btnClockNow2" class="ghost">Now</button></div></div>
+      <div><label>Return</label><input id="returnTime" type="time" placeholder="--:--"></div>
+      <div><label>Clock Out</label><input id="end" type="time" placeholder="--:--"></div>
 
       <div><label>Parcels</label><input id="parcels" type="number" min="0" value="0"></div>
       <div><label>Letters</label><input id="letters" type="number" min="0" value="0"></div>
-      <div><label>Miles</label><input id="miles" type="number" step="0.1" min="0" value="0"></div>
 
+      <div><label>Miles</label><input id="miles" type="number" step="0.1" min="0" value="0"></div>
       <div>
         <label>Weather</label>
-        <div class="row">
-          <select id="weather" style="min-width:160px">
-            <option value="">—</option>
-            <option>☀️ Sunny</option>
-            <option>⛅ Partly Cloudy</option>
-            <option>🌧️ Rain</option>
-            <option>❄️ Snow</option>
-            <option>💨 Windy</option>
-            <option>🌫️ Fog</option>
-            <option>Other</option>
-          </select>
-          <select id="temp" title="Temp (°F)" style="min-width:110px">
-            <option value="">Temp (°F)</option>
-            <option>20</option><option>25</option><option>30</option><option>35</option>
-            <option>40</option><option>45</option><option>50</option><option>55</option>
-            <option>60</option><option>65</option><option>70</option><option>75</option>
-            <option>80</option><option>85</option><option>90</option><option>95</option>
-          </select>
-        </div>
+        <select id="weather">
+          <option value="">—</option><option>☀️ Sunny</option><option>⛅ Partly Cloudy</option>
+          <option>🌧️ Rain</option><option>❄️ Snow</option><option>💨 Windy</option><option>🌫️ Fog</option><option>Other</option>
+        </select>
       </div>
 
-      <div>
-        <label>Box holders</label>
+      <div><label>Temp (°F)</label><input id="temp" type="number" step="1" min="-40" max="130"></div>
+      <div><label>Box holders</label>
         <select id="boxholders">
-          <option value="">—</option>
-          <option>None</option>
-          <option>Light</option>
-          <option>Medium</option>
-          <option>Heavy</option>
+          <option value="">—</option><option>None</option><option>Light</option><option>Medium</option><option>Heavy</option>
         </select>
       </div>
 
@@ -236,17 +124,12 @@
     </div>
   </section>
 
-  <!-- CHARTS -->
-  <section class="card"><h3 style="margin:0 0 8px 0">Averages by Day of Week</h3><canvas id="dowChart" height="180"></canvas></section>
-  <section class="card"><h3 style="margin:0 0 8px 0">Parcels Over Time (worked days)</h3><canvas id="parcelsChart" height="180"></canvas></section>
-  <section class="card"><h3 style="margin:0 0 8px 0">Letters Over Time (worked days)</h3><canvas id="lettersChart" height="180"></canvas></section>
-
-  <!-- TABLE -->
+  <!-- Table -->
   <section class="card" style="grid-column:1/-1">
     <div class="row" style="justify-content:space-between;gap:10px;flex-wrap:wrap">
       <h3 style="margin:0">Recent Entries</h3>
       <div class="row" style="gap:8px">
-        <input id="searchBox" type="search" placeholder="Search date, mood, weather, notes…" style="min-width:240px">
+        <input id="searchBox" type="search" placeholder="Search date, mood, weather, notes…" style="min-width:260px">
         <button id="exportCsv" class="ghost">Export CSV (All)</button>
         <button id="exportCsvFiltered" class="ghost">Export CSV (Filtered)</button>
         <input id="importFile" type="file" accept=".csv,text/csv" style="display:none">
@@ -254,80 +137,47 @@
         <button id="showUid" class="ghost" title="Show current user id">Show UID</button>
       </div>
     </div>
-    <div style="max-height:360px;overflow:auto;border:1px solid var(--border);border-radius:10px">
+    <div style="max-height:380px;overflow:auto;border:1px solid var(--border);border-radius:10px">
       <table id="tbl"><thead><tr>
-        <th>Date</th><th>Route</th><th>Status</th><th class="right">Office (h)</th><th class="right">Route (h)</th><th class="right">Total (h)</th><th class="right">Parcels</th><th class="right">Letters</th><th class="right">Miles</th><th>Weather</th>
+        <th>Date</th><th>Route</th><th>Status</th><th class="right">Office (h)</th><th class="right">Route (h)</th>
+        <th class="right">Total (h)</th><th class="right">Parcels</th><th class="right">Letters</th><th class="right">Miles</th><th>Weather</th>
       </tr></thead><tbody></tbody></table>
     </div>
   </section>
 </main>
 
-<!-- Magic link dialog -->
-<dialog id="linkDlg">
-  <form method="dialog" class="grid" style="min-width:320px;gap:10px">
-    <h3 style="margin:0">Link devices</h3>
-    <small>Enter your email, then tap the magic link in your inbox on each device.</small>
-    <input id="email" type="email" placeholder="you@example.com" required>
-    <div class="row" style="justify-content:flex-end;gap:8px"><button class="ghost" value="cancel">Cancel</button><button id="sendLink">Send link</button></div>
-  </form>
-</dialog>
+<!-- Dialogs -->
+<dialog id="linkDlg"><form method="dialog" class="grid" style="min-width:320px;gap:10px">
+  <h3 style="margin:0">Link devices</h3>
+  <small>Enter your email, then tap the magic link in your inbox on each device.</small>
+  <input id="email" type="email" placeholder="you@example.com" required>
+  <div class="row" style="justify-content:flex-end;gap:8px"><button class="ghost" value="cancel">Cancel</button><button id="sendLink">Send link</button></div>
+</form></dialog>
 
-<!-- Email + Password dialog -->
-<dialog id="pwDlg">
-  <form method="dialog" class="grid" style="min-width:320px;gap:10px">
-    <h3 style="margin:0">Sign in</h3>
-    <input id="loginEmail" type="email" placeholder="Email" autocomplete="username" required>
-    <input id="loginPass"  type="password" placeholder="Password" autocomplete="current-password" required>
-    <div class="row" style="justify-content:flex-end;gap:8px">
-      <button class="ghost" value="cancel">Cancel</button>
-      <button id="doLogin">Sign In</button>
-      <button id="doSignup" class="ghost" type="button" title="Create a new account">Create Account</button>
-    </div>
-    <small id="authMsg"></small>
-  </form>
-</dialog>
-
-<!-- Set Password dialog -->
-<dialog id="setPwDlg">
-  <form method="dialog" class="grid" style="min-width:320px;gap:10px">
-    <h3 style="margin:0">Set a new password</h3>
-    <input id="newPass"  type="password" placeholder="New password (6+ chars)" required>
-    <input id="newPass2" type="password" placeholder="Confirm password" required>
-    <div class="row" style="justify-content:flex-end;gap:8px">
-      <button class="ghost" value="cancel">Cancel</button>
-      <button id="doSetPw">Save</button>
-    </div>
-    <small id="setPwMsg"></small>
-  </form>
-</dialog>
+<dialog id="pwDlg"><form method="dialog" class="grid" style="min-width:320px;gap:10px">
+  <h3 style="margin:0">Sign in</h3>
+  <input id="loginEmail" type="email" placeholder="Email" autocomplete="username" required>
+  <input id="loginPass"  type="password" placeholder="Password" autocomplete="current-password" required>
+  <div class="row" style="justify-content:flex-end;gap:8px">
+    <button class="ghost" value="cancel">Cancel</button>
+    <button id="doLogin">Sign In</button>
+    <button id="doSignup" class="ghost" type="button" title="Create a new account">Create Account</button>
+  </div>
+  <small id="authMsg"></small>
+</form></dialog>
 
 <button class="fab" id="fab">+ Add Entry</button>
 
 <!-- Libs -->
 <script src="https://cdn.jsdelivr.net/npm/luxon@3/build/global/luxon.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
-<!-- Header date (safe, balanced) -->
+<!-- Header date + helpers -->
 <script>
-(function(){
-  const ZONE = 'America/Detroit';
-  const DateTime = luxon.DateTime;
-  const el = document.getElementById('headerDate');
-  if (el) el.textContent = DateTime.now().setZone(ZONE).toFormat('MMM d, yyyy');
-})();
-</script>
-
-<!-- App + Auth (handlers and fixes) -->
-<script>
-/* ===== CONFIG + HELPERS ===== */
-const SUPABASE_URL  = 'https://ouwkdtiixkaydrtfdhnh.supabase.co';
-const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im91d2tkdGlpeGtheWRydGZkaG5oIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTUwMDc0NDksImV4cCI6MjA3MDU4MzQ0OX0.KI-dYG5_A8jvPEHSog3wlnLbIGYIHQR_4ztXHL2SzIg';
 const ZONE = 'America/Detroit';
-const $ = id => document.getElementById(id);
 const DateTime = luxon.DateTime;
-const dConn=$('dConn'), dAuth=$('dAuth'), dWrite=$('dWrite');
-
+document.getElementById('headerDate').textContent = DateTime.now().setZone(ZONE).toFormat('MMM d, yyyy');
+const $ = id => document.getElementById(id);
 function todayStr(){ return DateTime.now().setZone(ZONE).toISODate(); }
 function hhmmNow(){ const d = DateTime.now().setZone(ZONE); return `${String(d.hour).padStart(2,'0')}:${String(d.minute).padStart(2,'0')}`; }
 function diffHours(d, t1, t2){
@@ -336,143 +186,183 @@ function diffHours(d, t1, t2){
   const b = DateTime.fromISO(`${d}T${t2}`, { zone: ZONE });
   let h = (b.toMillis()-a.toMillis())/3.6e6; if(h<0) h+=24; return Math.round(h*100)/100;
 }
-function routeEndTime(){ return ($('returnTime').value || $('end').value || ''); }
+function moonPhaseEmoji(dISO) {
+  const lp = 2551443;
+  const now = DateTime.fromISO(dISO, {zone: ZONE}).toSeconds();
+  const ref = DateTime.fromISO("2001-01-01", {zone: ZONE}).toSeconds();
+  const phase = ((now - ref) % lp) / lp;
+  if (phase < 0.03 || phase > 0.97) return "🌑";
+  if (phase < 0.25) return "🌒";
+  if (phase < 0.27) return "🌓";
+  if (phase < 0.48) return "🌔";
+  if (phase < 0.52) return "🌕";
+  if (phase < 0.75) return "🌖";
+  if (phase < 0.77) return "🌗";
+  return "🌘";
+}
+function dowLetter(dISO){ return DateTime.fromISO(dISO, {zone: ZONE}).toFormat('c') === '7' ? 'S' :
+  DateTime.fromISO(dISO, {zone: ZONE}).toFormat('ccc').charAt(0); }
 </script>
 
-<!-- Add working loadByDate + safe fill/clear (so PWA doesn't crash) -->
+<!-- App + Supabase -->
 <script>
-  // Ensure global edit key exists
-  if (typeof window.editingKey === 'undefined') window.editingKey = null;
-
-  // Prefill the form for the selected date (or today)
-  async function loadByDate(){
-    try {
-      const dateEl = $('date');
-      const d = (dateEl?.value || todayStr());
-      if (dateEl && !dateEl.value) dateEl.value = d;
-
-      // Try to get user; if none, stop quietly
-      const { data:{ user } } = await sb.auth.getUser();
-      if (!user) return;
-
-      const { data, error } = await sb
-        .from('entries')
-        .select('*')
-        .eq('user_id', user.id)
-        .eq('work_date', d)
-        .limit(1)
-        .maybeSingle();
-
-      if (error && error.code !== 'PGRST116') { console.warn('loadByDate error:', error); return; }
-
-      // Basic in-file fill/clear so we don't depend on external functions
-      function fillForm(row){
-        $('route').value      = row.route || 'R1';
-        $('start').value      = row.start || '08:00';
-        $('departTime').value = row.depart_time || row.departTime || '';
-        $('returnTime').value = row.return_time || row.returnTime || '';
-        $('end').value        = row.end || '';
-        $('parcels').value    = row.parcels ?? 0;
-        $('letters').value    = row.letters ?? 0;
-        $('miles').value      = row.miles ?? 0;
-        $('weather').value    = row.weather || '';
-        $('temp').value       = row.temp || '';
-        $('boxholders').value = row.boxholders || '';
-        $('mood').value       = row.mood || '';
-        $('notes').value      = row.notes || '';
-        $('offDay').checked   = !!row.off_day || !!row.offDay;
-        // Compute hours preview
-        const office = diffHours(d, $('start').value, $('departTime').value) ?? 0;
-        const routeH = diffHours(d, $('departTime').value, routeEndTime()) ?? 0;
-        const total  = Math.round((office + routeH) * 100)/100;
-        $('officeH').textContent = office ? office.toFixed(2) : '—';
-        $('routeH').textContent  = routeH ? routeH.toFixed(2) : '—';
-        $('totalH').textContent  = total  ? total.toFixed(2)  : '—';
-      }
-      function clearForm(){
-        // Keep date as-is; reset the rest
-        $('route').value      = 'R1';
-        $('start').value      = '08:00';
-        $('departTime').value = '';
-        $('returnTime').value = '';
-        $('end').value        = '';
-        $('parcels').value    = 0;
-        $('letters').value    = 0;
-        $('miles').value      = 0;
-        $('weather').value    = '';
-        $('temp').value       = '';
-        $('boxholders').value = '';
-        $('mood').value       = '';
-        $('notes').value      = '';
-        $('offDay').checked   = false;
-        $('officeH').textContent = '—';
-        $('routeH').textContent  = '—';
-        $('totalH').textContent  = '—';
-      }
-
-      const saveBtn = $('save');
-      if (saveBtn) saveBtn.classList.remove('ghost');
-
-      if (data) {
-        window.editingKey = { user_id: user.id, work_date: d };
-        fillForm(data);
-        if (saveBtn) saveBtn.textContent = 'Update';
-      } else {
-        window.editingKey = null;
-        clearForm();
-        if (saveBtn) saveBtn.textContent = 'Save';
-      }
-    } catch (err) {
-      console.warn('loadByDate exception:', err);
-    }
-  }
-</script>
-
-<!-- Supabase + Auth wiring -->
-<script>
-/* ===== SUPABASE CLIENT ===== */
+const SUPABASE_URL  = 'https://ouwkdtiixkaydrtfdhnh.supabase.co';
+const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im91d2tkdGlpeGtheWRydGZkaG5oIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTUwMDc0NDksImV4cCI6MjA3MDU4MzQ0OX0.KI-dYG5_A8jvPEHSog3wlnLbIGYIHQR_4ztXHL2SzIg';
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON, { auth:{ persistSession:true }});
 
-// Auth callback (magic links / recovery)
-(async () => {
-  try {
-    const { data, error } = await sb.auth.getSessionFromUrl();
-    if (!error && data?.session && /type=recovery/i.test(location.hash)) {
-      const p1 = prompt('Enter a new password (6+ characters)');
-      if (p1 && p1.length >= 6) {
-        const { error: uerr } = await sb.auth.updateUser({ password: p1 });
-        if (uerr) alert('Update failed: ' + uerr.message);
-        else alert('Password updated. You can now sign in normally.');
-      } else {
-        alert('Password must be at least 6 characters.');
-      }
-      window.history.replaceState({}, document.title, window.location.pathname);
-    } else if (!error && data?.session) {
-      window.history.replaceState({}, document.title, window.location.pathname);
-    }
-  } catch (e) { console.warn('Auth callback error', e); }
-})();
+const dConn=$('dConn'), dAuth=$('dAuth');
 
-// Connectivity + session bootstrap
 (async ()=>{ try{ await fetch(SUPABASE_URL,{mode:'no-cors'}); dConn.textContent='Connected'; }catch{ dConn.textContent='Error'; }})();
-(async function ensureSession(){
-  const { data:{ session } } = await sb.auth.getSession();
-  if(!session){ try{ await sb.auth.signInAnonymously(); }catch{} }
+
+// BASIC DATA ACCESS
+async function fetchEntries(){
   const { data:{ user } } = await sb.auth.getUser();
-  dAuth.textContent = user? 'Session' : 'No session';
-})();
+  if (!user) return [];
+  const { data, error } = await sb.from('entries')
+    .select('*')
+    .eq('user_id', user.id)
+    .order('work_date', { ascending:false })
+    .limit(400);
+  if (error) { console.warn(error); return []; }
+  return data || [];
+}
 
-/* ===== AUTH UI ===== */
-const linkBtn=$('linkBtn'), linkDlg=$('linkDlg'), sendLink=$('sendLink'), email=$('email');
-linkBtn.addEventListener('click', ()=> linkDlg.showModal());
-sendLink.addEventListener('click', async (e)=>{
-  e.preventDefault();
-  const redirectTo = location.origin + location.pathname;
-  const { error } = await sb.auth.signInWithOtp({ email: email.value, options:{ emailRedirectTo: redirectTo } });
-  if (error) alert(error.message); else { alert('Check your email for the magic link.'); linkDlg.close(); }
+async function upsertEntry(row){
+  const { data:{ user } } = await sb.auth.getUser();
+  if (!user) throw new Error('No user');
+  row.user_id = user.id;
+  const { error } = await sb.from('entries').upsert(row).select().single();
+  if (error) throw error;
+}
+
+// RENDER TABLE
+function applySearch(rows){
+  const q = ($('searchBox').value||'').trim().toLowerCase();
+  if (!q) return rows;
+  return rows.filter(r => {
+    return (r.work_date||'').includes(q) || (r.mood||'').toLowerCase().includes(q)
+      || (r.weather||'').toLowerCase().includes(q) || (r.notes||'').toLowerCase().includes(q);
+  });
+}
+
+function renderTable(rows){
+  const tb = document.querySelector('#tbl tbody');
+  tb.innerHTML = '';
+  for (const r of rows){
+    const d = r.work_date;
+    const dow = dowLetter(d);
+    const moon = moonPhaseEmoji(d);
+    const office = diffHours(d, r.start, r.depart_time||r.departTime) ?? 0;
+    const routeH = diffHours(d, r.depart_time||r.departTime, r.end||r.return_time||r.returnTime) ?? 0;
+    const total  = Math.round((office + routeH)*100)/100;
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td>${d} (${dow}) ${moon}</td>
+      <td>${r.route||'R1'}</td>
+      <td>${r.off_day? 'Off' : 'Worked'}</td>
+      <td class="right">${office? office.toFixed(2) : '—'}</td>
+      <td class="right">${routeH? routeH.toFixed(2) : '—'}</td>
+      <td class="right">${total? total.toFixed(2) : '—'}</td>
+      <td class="right">${r.parcels ?? ''}</td>
+      <td class="right">${r.letters ?? ''}</td>
+      <td class="right">${r.miles ?? ''}</td>
+      <td>${r.weather || ''}</td>`;
+    tb.appendChild(tr);
+  }
+}
+
+// FORM PREFILL
+async function loadByDate(){
+  try{
+    const dateEl = $('date');
+    const d = (dateEl.value || todayStr());
+    if (!dateEl.value) dateEl.value = d;
+
+    const { data:{ user } } = await sb.auth.getUser();
+    if (!user) return;
+
+    const { data, error } = await sb
+      .from('entries')
+      .select('*')
+      .eq('user_id', user.id)
+      .eq('work_date', d).maybeSingle();
+
+    if (error && error.code !== 'PGRST116'){ console.warn(error); return; }
+
+    if (data){
+      $('route').value      = data.route || 'R1';
+      $('start').value      = data.start || '08:00';
+      $('departTime').value = data.depart_time || data.departTime || '';
+      $('returnTime').value = data.return_time || data.returnTime || '';
+      $('end').value        = data.end || '';
+      $('parcels').value    = data.parcels ?? 0;
+      $('letters').value    = data.letters ?? 0;
+      $('miles').value      = data.miles ?? 0;
+      $('weather').value    = data.weather || '';
+      $('temp').value       = data.temp || '';
+      $('boxholders').value = data.boxholders || '';
+      $('mood').value       = data.mood || '';
+      $('notes').value      = data.notes || '';
+      $('offDay').checked   = !!data.off_day || !!data.offDay;
+    }else{
+      // clears
+      $('route').value='R1'; $('start').value='08:00';
+      $('departTime').value=''; $('returnTime').value=''; $('end').value='';
+      $('parcels').value=0; $('letters').value=0; $('miles').value=0;
+      $('weather').value=''; $('temp').value=''; $('boxholders').value='';
+      $('mood').value=''; $('notes').value=''; $('offDay').checked=false;
+    }
+
+    // compute preview
+    const office = diffHours(d, $('start').value, $('departTime').value) ?? 0;
+    const routeH = diffHours(d, $('departTime').value, $('end').value || $('returnTime').value) ?? 0;
+    const total  = Math.round((office + routeH) * 100)/100;
+    $('officeH').textContent = office? office.toFixed(2):'—';
+    $('routeH').textContent  = routeH? routeH.toFixed(2):'—';
+    $('totalH').textContent  = total? total.toFixed(2):'—';
+
+  }catch(e){ console.warn('loadByDate error', e); }
+}
+
+// SAVE HANDLER
+$('save').addEventListener('click', async ()=>{
+  try{
+    $('save').disabled = true; $('save').textContent='Saving…';
+    const d = $('date').value || todayStr();
+    await upsertEntry({
+      work_date: d,
+      route: $('route').value || 'R1',
+      start: $('start').value || null,
+      depart_time: $('departTime').value || null,
+      return_time: $('returnTime').value || null,
+      end: $('end').value || null,
+      parcels: Number($('parcels').value||0),
+      letters: Number($('letters').value||0),
+      miles: Number($('miles').value||0),
+      weather: $('weather').value || null,
+      temp: $('temp').value || null,
+      boxholders: $('boxholders').value || null,
+      mood: $('mood').value || null,
+      notes: $('notes').value || null,
+      off_day: $('offDay').checked
+    });
+    await loadByDate();
+    const rows = await fetchEntries();
+    renderTable(applySearch(rows));
+    $('save').textContent='Saved'; setTimeout(()=>{ $('save').textContent='Save'; },700);
+  }catch(err){
+    alert('Save failed: ' + (err?.message||err));
+  }finally{
+    $('save').disabled=false;
+  }
 });
-$('signOut').addEventListener('click', ()=> sb.auth.signOut().then(()=>location.reload()));
 
+// SEARCH
+$('searchBox').addEventListener('input', async ()=>{
+  const rows = await fetchEntries();
+  renderTable(applySearch(rows));
+});
+
+// AUTH UI
 const signInBtn = $('signInBtn');
 const pwDlg     = $('pwDlg');
 const loginEmail= $('loginEmail');
@@ -480,6 +370,7 @@ const loginPass = $('loginPass');
 const doLogin   = $('doLogin');
 const doSignup  = $('doSignup');
 const authMsg   = $('authMsg');
+const linkBtn=$('linkBtn'), linkDlg=$('linkDlg'), sendLink=$('sendLink'), email=$('email');
 
 signInBtn?.addEventListener('click', ()=> {
   authMsg.textContent = '';
@@ -488,43 +379,45 @@ signInBtn?.addEventListener('click', ()=> {
   pwDlg.showModal();
 });
 
-// Robust Sign In (waits for session)
+linkBtn.addEventListener('click', ()=> linkDlg.showModal());
+sendLink.addEventListener('click', async (e)=>{
+  e.preventDefault();
+  const redirectTo = location.origin + location.pathname;
+  const { error } = await sb.auth.signInWithOtp({ email: email.value, options:{ emailRedirectTo: redirectTo } });
+  if (error) alert(error.message); else { alert('Check your email for the magic link.'); linkDlg.close(); }
+});
+
+$('signOut').addEventListener('click', async ()=>{
+  try { await sb.auth.signOut(); } catch {}
+  location.reload();
+});
+
 doLogin?.addEventListener('click', async (e)=>{
   e.preventDefault();
   authMsg.textContent = 'Signing in…';
   const email = (loginEmail.value||'').trim();
   const password = loginPass.value||'';
-  const { error } = await sb.auth.signInWithPassword({ email, password });
-  if (error) {
-    if (/Email not confirmed/i.test(error.message)) authMsg.textContent = 'Email not confirmed. Use reset link or check your inbox.';
-    else if (/Invalid login credentials/i.test(error.message)) authMsg.textContent = 'Invalid email or password. Try Reset or Create Account.';
-    else authMsg.textContent = 'Error: ' + error.message;
-    return;
-  }
-  let session = null, tries = 0;
-  while (!session && tries++ < 10) {
-    const r = await sb.auth.getSession();
-    session = r?.data?.session || null;
-    if (!session) await new Promise(r => setTimeout(r, 150));
-  }
-  authMsg.textContent = session ? 'Signed in!' : 'Signed in (pending session)…';
-  pwDlg.close();
-
-  // Refresh UI/data so the form pre-fills (tolerant calls)
-  let rows = null;
-  if (typeof fetchEntries === 'function') {
-    try { rows = await fetchEntries(); } catch {}
-  }
-  if (rows && Array.isArray(rows)) {
-    window.allRows = rows;
-    if (typeof applySearch === 'function' && typeof renderTable === 'function') {
-      try { renderTable(applySearch(rows)); } catch {}
+  try {
+    const ctrl = new AbortController();
+    const t = setTimeout(()=>ctrl.abort('Timeout'), 12000);
+    const { data, error } = await sb.auth.signInWithPassword({ email, password }, { signal: ctrl.signal });
+    clearTimeout(t);
+    if (error) {
+      if (/Email not confirmed/i.test(error.message)) authMsg.textContent = 'Email not confirmed. Use reset link or check your inbox.';
+      else if (/Invalid login credentials/i.test(error.message)) authMsg.textContent = 'Invalid email or password.';
+      else authMsg.textContent = 'Error: ' + error.message;
+      return;
     }
-    if (typeof buildCharts === 'function')   try { buildCharts(rows); }   catch{}
-    if (typeof buildSnapshot === 'function') try { buildSnapshot(rows); } catch{}
+    authMsg.textContent = 'Signed in!';
+    setTimeout(()=>{ try{ pwDlg.close(); }catch{}; }, 150);
+    $('signOut').style.display='inline-block';
+    dAuth.textContent='Session';
+    // Prefill + render
+    await loadByDate();
+    const rows = await fetchEntries(); renderTable(applySearch(rows));
+  } catch (err) {
+    authMsg.textContent = (err && err.name==='AbortError') ? 'Network timeout. Try again.' : ('Error: ' + (err?.message||err));
   }
-  // Always try to prefill the form for today
-  try { await loadByDate?.(); } catch {}
 });
 
 doSignup?.addEventListener('click', async ()=>{
@@ -538,116 +431,67 @@ doSignup?.addEventListener('click', async ()=>{
     : 'Account created. If email confirmation is on, check your inbox, then Sign In.';
 });
 
-// Set password for CURRENT user
-const setPwBtn = $('setPwBtn');
-const setPwDlg = $('setPwDlg');
-const newPass  = $('newPass');
-const newPass2 = $('newPass2');
-const setPwMsg = $('setPwMsg');
-const doSetPw  = $('doSetPw');
-
-setPwBtn?.addEventListener('click', ()=> {
-  setPwMsg.textContent = '';
-  newPass.value = '';
-  newPass2.value = '';
-  setPwDlg.showModal();
-});
-
-doSetPw?.addEventListener('click', async (e)=>{
-  e.preventDefault();
-  const p1 = newPass.value || '';
-  const p2 = newPass2.value || '';
-  if (p1.length < 6) { setPwMsg.textContent = 'Password must be at least 6 characters.'; return; }
-  if (p1 !== p2)     { setPwMsg.textContent = 'Passwords do not match.'; return; }
-  setPwMsg.textContent = 'Updating…';
-  const { error } = await sb.auth.updateUser({ password: p1 });
-  if (error) { setPwMsg.textContent = 'Error: ' + error.message; return; }
-  setPwMsg.textContent = 'Password set! You can now sign in anywhere.';
-  setTimeout(()=> setPwDlg.close(), 600);
-});
-
-// Keep UI in sync on auth-state changes (tolerant)
-sb.auth.onAuthStateChange(async (_evt, session) => {
+// Session restore + auth-state changes
+sb.auth.onAuthStateChange(async (_evt, session)=>{
   const authed = !!session;
-  const signOutBtn = $('signOut');
-  if (signOutBtn) signOutBtn.style.display = authed ? 'inline-block' : 'none';
   dAuth.textContent = authed ? 'Session' : 'No session';
+  $('signOut').style.display = authed ? 'inline-block' : 'none';
   if (authed) {
-    try { await loadByDate?.(); } catch {}
-    let rows = null;
-    if (typeof fetchEntries === 'function') {
-      try { rows = await fetchEntries(); } catch {}
-    }
-    if (rows && Array.isArray(rows)) {
-      window.allRows = rows;
-      if (typeof applySearch === 'function' && typeof renderTable === 'function') {
-        try { renderTable(applySearch(rows)); } catch {}
-      }
-      if (typeof buildCharts === 'function')   try { buildCharts(rows); }   catch{}
-      if (typeof buildSnapshot === 'function') try { buildSnapshot(rows); } catch{}
-    }
+    await loadByDate();
+    const rows = await fetchEntries(); renderTable(applySearch(rows));
   }
 });
 
-console.log('Route Stats loaded — v2025-08-27-patched+setpw+fix1');
-</script>
-
-<!-- Safety net: delegated wiring + error surfacing -->
-<script>
-document.addEventListener('click', async (e) => {
-  const id = (e.target && e.target.id) || (e.target.closest && (e.target.closest('button')?.id));
-  if (!id) return;
-
-  if (id === 'signInBtn') {
-    e.preventDefault();
-    const dlg = document.getElementById('pwDlg');
-    if (dlg && typeof dlg.showModal === 'function') dlg.showModal();
-    else alert('Sign-in dialog not available on this browser.');
-  }
-
-  if (id === 'signOut') {
-    e.preventDefault();
-    try { await sb.auth.signOut(); } catch {}
-    location.reload();
-  }
-
-  if (id === 'showUid') {
-    e.preventDefault();
-    try {
-      let { data:{ session } } = await sb.auth.getSession();
-      if (!session) {
-        let tries = 0;
-        while (!session && tries++ < 10) {
-          await new Promise(r => setTimeout(r, 150));
-          ({ data:{ session } } = await sb.auth.getSession());
-        }
-      }
-      if (!session) { alert('No session yet. Please Sign in first.'); return; }
-      const { data:{ user } } = await sb.auth.getUser();
-      if (!user) { alert('No session. Try signing in again.'); return; }
-      alert(`Current user id (account key):\n${user.id}\n\nEntries are filtered by this id.`);
-    } catch {
-      alert('Could not fetch user. Try signing in again.');
+// On load: date=today, try restore
+document.addEventListener('DOMContentLoaded', async ()=>{
+  $('date').value = todayStr();
+  try{
+    const { data:{ session } } = await sb.auth.getSession();
+    if (session){
+      dAuth.textContent='Session';
+      $('signOut').style.display='inline-block';
+      await loadByDate();
+      const rows = await fetchEntries(); renderTable(applySearch(rows));
+    } else {
+      dAuth.textContent='No session';
     }
-  }
+  }catch{}
+  console.log('Route Stats loaded — v2025-08-27-fullfix');
 });
 
-(function(){
-  const diag = document.getElementById('diag');
-  window.addEventListener('error', (ev) => {
-    if (!diag) return;
-    const msg = (ev?.error?.message) || ev.message || String(ev);
-    diag.innerHTML += ` · <b style="color:#ff8fa1">ERR</b>: ${msg}`;
-  });
-  window.addEventListener('unhandledrejection', (ev) => {
-    if (!diag) return;
-    const msg = (ev?.reason?.message) || String(ev.reason);
-    diag.innerHTML += ` · <b style="color:#ff8fa1">ERR</b>: ${msg}`;
-  });
-})();
+// UID button
+$('showUid').addEventListener('click', async (e)=>{
+  e.preventDefault();
+  try {
+    let { data:{ session } } = await sb.auth.getSession();
+    if (!session) {
+      // small wait-and-retry
+      let tries=0; while(!session && tries++<10){
+        await new Promise(r=>setTimeout(r,150));
+        ({ data:{ session } } = await sb.auth.getSession());
+      }
+    }
+    if (!session) { alert('No session yet. Please Sign in first.'); return; }
+    const { data:{ user } } = await sb.auth.getUser();
+    if (!user) { alert('No session. Try signing in again.'); return; }
+    alert(`Current user id (account key):\n${user.id}\n\nEntries are filtered by this id.`);
+  } catch(e){ alert('Could not fetch user. Try signing in again.'); }
+});
+
+// Error surfacing
+window.addEventListener('error', (ev) => {
+  const diag = document.getElementById('diag'); if (!diag) return;
+  const msg = (ev?.error?.message) || ev.message || String(ev);
+  diag.innerHTML += ` · <b style="color:#ff8fa1">ERR</b>: ${msg}`;
+});
+window.addEventListener('unhandledrejection', (ev) => {
+  const diag = document.getElementById('diag'); if (!diag) return;
+  const msg = (ev?.reason?.message) || String(ev.reason);
+  diag.innerHTML += ` · <b style="color:#ff8fa1">ERR</b>: ${msg}`;
+});
 </script>
 
-<!-- Register the service worker for offline support -->
+<!-- Minimal SW register (your sw.js handles cache/versioning) -->
 <script>
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', function() {
@@ -657,5 +501,6 @@ if ('serviceWorker' in navigator) {
   });
 }
 </script>
+
 </body>
 </html>
