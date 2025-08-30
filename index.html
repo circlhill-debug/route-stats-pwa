@@ -877,7 +877,52 @@
 
   console.log('Route Stats loaded — v2025-08-27-patched+setpw');
 </script>
+  <script>
+  // Robust button wiring: works even if early bindings failed
+  document.addEventListener('click', async (e) => {
+    const id = (e.target && e.target.id) || (e.target.closest && (e.target.closest('button')?.id));
+    if (!id) return;
 
+    if (id === 'signInBtn') {
+      e.preventDefault();
+      const dlg = document.getElementById('pwDlg');
+      if (dlg && typeof dlg.showModal === 'function') dlg.showModal();
+      else alert('Sign-in dialog not available on this browser.');
+    }
+
+    if (id === 'signOut') {
+      e.preventDefault();
+      try { await sb.auth.signOut(); } catch {}
+      location.reload();
+    }
+
+    if (id === 'showUid') {
+      e.preventDefault();
+      try {
+        const { data:{ user } } = await sb.auth.getUser();
+        if (!user) { alert('No session. Use Link devices or Sign in.'); return; }
+        alert(`Current user id (account key):\n${user.id}\n\nEntries are filtered by this id.`);
+      } catch (err) {
+        alert('Could not fetch user. Try signing in again.');
+      }
+    }
+  });
+
+  // Optional: surface runtime errors in the top diag bar so we notice them on iPhone
+  (function(){
+    const diag = document.getElementById('diag');
+    window.addEventListener('error', (ev) => {
+      if (!diag) return;
+      const msg = (ev?.error?.message) || ev.message || String(ev);
+      diag.innerHTML += ` · <b style="color:#ff8fa1">ERR</b>: ${msg}`;
+    });
+    window.addEventListener('unhandledrejection', (ev) => {
+      if (!diag) return;
+      const msg = (ev?.reason?.message) || String(ev.reason);
+      diag.innerHTML += ` · <b style="color:#ff8fa1">ERR</b>: ${msg}`;
+    });
+  })();
+</script>
 <!-- Register the service worker for offline support -->
 <script>
   if ('serviceWorker' in navigator) {
