@@ -1,10 +1,10 @@
-/* Route Stats PWA Service Worker — SAFE NETWORK HANDLING
+/* Route Stats SW — SAFE SAME-ORIGIN GET ONLY
    - Caches only same-origin GET requests
    - Never intercepts Supabase (*.supabase.co) or any cross-origin requests
    - Never caches POST/PUT/PATCH/DELETE
    - Navigation fallback to cached index.html when offline
 */
-const CACHE_NAME = 'route-stats-cache-v025';
+const CACHE_NAME = 'route-stats-cache-v026';
 const CORE_ASSETS = [
   './',
   './index.html',
@@ -38,7 +38,7 @@ self.addEventListener('fetch', (event) => {
   // Never handle cross-origin (e.g., Supabase) — let network handle
   if (url.origin !== self.location.origin) return;
 
-  // For navigation requests, try network first, fallback to cached index.html
+  // For navigation requests, network-first, fallback to cached index.html
   if (req.mode === 'navigate') {
     event.respondWith((async () => {
       try {
